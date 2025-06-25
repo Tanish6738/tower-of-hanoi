@@ -171,6 +171,7 @@ class GameRoom:
                 
                 # Game ends when all players finish or first place is decided
                 if placement == 1:
+                    self.game_finished = True
                     return True
                     
             elif self.game_mode == 'team':
@@ -183,11 +184,11 @@ class GameRoom:
                     return True
                     
             else:
-                # Classic/Spectator mode: first to finish wins
+                # Classic/Spectator mode: first to finish wins, but announce to all players
                 if not self.winner:
                     self.winner = player_id
-                    self.game_finished = True
-                    return True
+                self.game_finished = True  # Always end game when someone finishes
+                return True
         return False
     
     def forfeit_game(self, player_id):
@@ -482,12 +483,34 @@ def handle_game_move(data):
             'moves': moves
         }, room=room_id)
 
+@socketio.on('player_move')
+def handle_player_move(data):
+    room_id = data['room_id']
+    player_id = data['player_id']
+    moves = data['moves']
+    from_peg = data.get('from_peg')
+    to_peg = data.get('to_peg')
+    
+    if room_id in game_rooms and player_id in game_rooms[room_id].players:
+        # Update player's move count in game state
+        if game_rooms[room_id].players[player_id].get('game_state'):
+            game_rooms[room_id].players[player_id]['game_state']['moves'] = moves
+        
+        # Broadcast move details to all players in room
+        socketio.emit('opponent_move', {
+            'player_id': player_id,
+            'player_name': game_rooms[room_id].players[player_id]['name'],
+            'moves': moves,
+            'from_peg': from_peg,
+            'to_peg': to_peg
+        }, room=room_id)
+
 @socketio.on('game_finished')
 def handle_game_finished(data):
     room_id = data['room_id']
     player_id = data['player_id']
     moves = data['moves']
-    time_taken = data['time_taken']
+    time_taken = data['time']
     
     if room_id in game_rooms:
         room = game_rooms[room_id]
@@ -496,14 +519,22 @@ def handle_game_finished(data):
             
             game_end_data = {
                 'room_info': room.get_room_info(),
-                'finisher': player_name,
-                'finisher_moves': moves,
-                'finisher_time': time_taken
+                'finisher': {
+                    'player_id': player_id,
+                    'player_name': player_name,
+                    'moves': moves,
+                    'time': time_taken
+                },
+                'winner': {
+                    'player_id': room.winner,
+                    'player_name': room.players[room.winner]['name'] if room.winner and room.winner in room.players else None,
+                    'moves': room.players[room.winner]['game_state']['moves'] if room.winner and room.winner in room.players else moves,
+                    'time': room.players[room.winner]['game_state']['finish_time'] if room.winner and room.winner in room.players else time_taken
+                }
             }
             
             if room.game_mode == 'tournament':
                 game_end_data.update({
-                    'winner': player_name,
                     'placement': room.players[player_id]['placement'],
                     'leaderboard': room.leaderboard,
                     'tournament_complete': room.game_finished
@@ -511,14 +542,7 @@ def handle_game_finished(data):
             elif room.game_mode == 'team':
                 game_end_data.update({
                     'winning_team': room.winning_team,
-                    'winner': player_name,
                     'team_victory': True
-                })
-            else:
-                game_end_data.update({
-                    'winner': player_name,
-                    'winner_moves': moves,
-                    'winner_time': time_taken
                 })
             
             socketio.emit('game_ended', game_end_data, room=room_id)

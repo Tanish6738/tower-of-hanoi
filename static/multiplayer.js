@@ -434,6 +434,7 @@ class MultiplayerTowerOfHanoi {
         Object.entries(roomInfo.players).forEach(([playerId, playerInfo]) => {
             const playerDiv = document.createElement('div');
             playerDiv.className = 'p-4 border border-gray-200 dark:border-gray-600 rounded-lg';
+            playerDiv.setAttribute('data-player-id', playerId);
             
             const isCurrentPlayer = playerId === this.playerId;
             const statusIcon = playerInfo.ready ? '✅' : '⏳';
@@ -447,6 +448,12 @@ class MultiplayerTowerOfHanoi {
                 resetInfo = `<div class="text-xs text-gray-500 dark:text-gray-400">Resets: ${resetsLeft}/${roomInfo.max_resets}</div>`;
             }
             
+            let moveInfo = '';
+            if (roomInfo.game_started) {
+                const currentMoves = isCurrentPlayer ? this.moves : 0;
+                moveInfo = `<div class="text-sm text-gray-600 dark:text-gray-400 player-moves">${currentMoves} moves</div>`;
+            }
+            
             playerDiv.innerHTML = `
                 <div class="font-semibold ${isCurrentPlayer ? 'text-blue-800 dark:text-blue-200' : 'text-gray-800 dark:text-gray-200'}">
                     ${playerInfo.name} ${isCurrentPlayer ? '(You)' : ''}
@@ -454,6 +461,7 @@ class MultiplayerTowerOfHanoi {
                 <div class="text-sm text-gray-600 dark:text-gray-400">
                     ${statusIcon} ${playerInfo.ready ? 'Ready' : 'Not Ready'}
                 </div>
+                ${moveInfo}
                 ${resetInfo}
             `;
             container.appendChild(playerDiv);
@@ -774,6 +782,9 @@ class MultiplayerTowerOfHanoi {
         if (moveElement) {
             moveElement.textContent = this.moves;
         }
+        
+        // Update our own move display in player list
+        this.updatePlayerMoveDisplay(this.playerId, this.moves);
     }
 
     // Game logic methods
@@ -862,10 +873,29 @@ class MultiplayerTowerOfHanoi {
 
     // Socket event handlers
     updateOpponentMoves(data) {
-        this.opponentMoves = data.moves;
+        // Don't update for own moves
+        if (data.player_id === this.playerId) {
+            return;
+        }
+        
+        // Update opponent move display
         const opponentMovesElement = document.getElementById('player2Moves');
         if (opponentMovesElement) {
-            opponentMovesElement.textContent = this.opponentMoves;
+            opponentMovesElement.textContent = data.moves;
+        }
+        
+        // Update player list with current moves if it exists
+        this.updatePlayerMoveDisplay(data.player_id, data.moves);
+    }
+    
+    updatePlayerMoveDisplay(playerId, moves) {
+        // Update moves in player list display
+        const playerElement = document.querySelector(`[data-player-id="${playerId}"]`);
+        if (playerElement) {
+            const movesSpan = playerElement.querySelector('.player-moves');
+            if (movesSpan) {
+                movesSpan.textContent = `${moves} moves`;
+            }
         }
     }
 
@@ -875,7 +905,9 @@ class MultiplayerTowerOfHanoi {
         
         // Show game result
         const winner = data.winner;
+        const finisher = data.finisher;
         const isWinner = winner && winner.player_id === this.playerId;
+        const isFinisher = finisher && finisher.player_id === this.playerId;
         
         let message = '';
         if (data.forfeit && data.left_game) {
@@ -890,12 +922,28 @@ class MultiplayerTowerOfHanoi {
             } else {
                 message = `You forfeited the game.`;
             }
-        } else if (isWinner) {
-            message = `🎉 Congratulations! You won in ${this.moves} moves!`;
-        } else if (winner) {
-            message = `😔 ${winner.player_name} won the game!`;
+        } else if (data.game_mode === 'tournament') {
+            if (isFinisher) {
+                message = `🎉 You finished in place ${data.placement}!`;
+            }
+            if (data.tournament_complete && isWinner) {
+                message = `� Congratulations! You won the tournament!`;
+            }
+        } else if (data.game_mode === 'team') {
+            if (data.winning_team === this.playerTeam) {
+                message = `🎉 Your team won! ${winner.player_name} finished first for Team ${data.winning_team}!`;
+            } else {
+                message = `😔 Team ${data.winning_team} won! ${winner.player_name} finished first.`;
+            }
         } else {
-            message = 'Game ended';
+            // Classic or spectator mode
+            if (isWinner) {
+                message = `🎉 Congratulations! You won in ${winner.moves} moves in ${this.formatTime(winner.time)}!`;
+            } else if (winner) {
+                message = `😔 ${winner.player_name} won the game in ${winner.moves} moves in ${this.formatTime(winner.time)}!`;
+            } else {
+                message = 'Game ended';
+            }
         }
         
         this.showMessage(message, isWinner ? 'success' : (data.forfeit ? 'warning' : 'info'));
@@ -1056,6 +1104,18 @@ class MultiplayerTowerOfHanoi {
         setTimeout(() => {
             element.classList.remove('invalid-move');
         }, 500);
+    }
+
+    formatTime(milliseconds) {
+        const seconds = Math.floor(milliseconds / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        
+        if (minutes > 0) {
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        } else {
+            return `${remainingSeconds}s`;
+        }
     }
 }
 

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower of Hanoi - Multiplayer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
+    
+    <!-- Room Creation/Join Modal -->
+    <div id="roomModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md mx-4 text-center mobile-friendly">
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-6">Tower of Hanoi Multiplayer</h2>
+            
+            <!-- Player Name Input -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Your Name</label>
+                <input type="text" id="playerNameInput" placeholder="Enter your name" 
+                       class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 mobile-friendly">
+            </div>
+
+            <!-- Room Options -->
+            <div class="space-y-4">
+                <!-- Create Room -->
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-800 dark:text-white mb-3">Create New Room</h3>
+                    
+                    <!-- Game Mode Selection -->
+                    <div class="mb-3">
+                        <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">Game Mode</label>
+                        <select id="gameModeSelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            <option value="classic">🎯 Classic (1v1)</option>
+                            <option value="tournament">🏆 Tournament (3-8 players)</option>
+                            <option value="team">👥 Team Battle (2v2, 3v3)</option>
+                            <option value="spectator">👁️ Spectator Mode (2 players + viewers)</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Max Players (for tournament/team modes) -->
+                    <div class="mb-3" id="maxPlayersContainer" style="display: none;">
+                        <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">Max Players</label>
+                        <select id="maxPlayersSelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            <option value="3">3 Players</option>
+                            <option value="4">4 Players</option>
+                            <option value="5">5 Players</option>
+                            <option value="6">6 Players</option>
+                            <option value="7">7 Players</option>
+                            <option value="8">8 Players</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">Number of Disks</label>
+                        <select id="diskCountSelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            <option value="3">3 Disks</option>
+                            <option value="4" selected>4 Disks</option>
+                            <option value="5">5 Disks</option>
+                            <option value="6">6 Disks</option>
+                            <option value="7">7 Disks</option>
+                        </select>
+                    </div>
+                    <button id="createRoomBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition-colors mobile-friendly touch-target">
+                        Create Room
+                    </button>
+                </div>
+
+                <!-- Join Room -->
+                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-800 dark:text-white mb-3">Join Existing Room</h3>
+                    <input type="text" id="roomIdInput" placeholder="Enter Room ID" 
+                           class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 mb-3 mobile-friendly">
+                    
+                    <!-- Join Options -->
+                    <div class="mb-3">
+                        <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">Join As</label>
+                        <select id="joinRoleSelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            <option value="player">🎮 Player</option>
+                            <option value="spectator">👁️ Spectator</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Team Selection (shown for team mode) -->
+                    <div class="mb-3" id="teamSelectContainer" style="display: none;">
+                        <label class="block text-sm text-gray-600 dark:text-gray-400 mb-1">Team</label>
+                        <select id="teamSelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            <option value="A">🔴 Team A</option>
+                            <option value="B">🔵 Team B</option>
+                        </select>
+                    </div>
+                    
+                    <button id="joinRoomBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 rounded-lg transition-colors mobile-friendly touch-target">
+                        Join Room
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Lobby -->
+    <div id="gameLobby" class="hidden">
+        <!-- Header -->
+        <header class="p-4 sm:p-6 text-center">
+            <div class="header-container flex justify-between items-center max-w-4xl mx-auto">
+                <h1 class="game-title text-2xl sm:text-4xl font-bold text-gray-800 dark:text-white">
+                    🗼 Tower of Hanoi - Multiplayer
+                </h1>
+                <button id="darkModeToggle" class="dark-mode-toggle p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors mobile-friendly touch-target">
+                    <span class="text-xl">🌙</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Room Info -->
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 fade-in">
+                <div class="flex flex-wrap justify-between items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-2">Room Information</h3>
+                        <p class="text-gray-600 dark:text-gray-400">Room ID: <span id="currentRoomId" class="font-mono font-bold"></span></p>
+                        <p class="text-gray-600 dark:text-gray-400">Disks: <span id="currentDiskCount" class="font-bold"></span></p>
+                    </div>
+                    <div class="space-y-2">
+                        <button id="copyInviteBtn" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium mobile-friendly touch-target">
+                            Copy Invite Link
+                        </button>
+                        <button id="leaveRoomBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium mobile-friendly touch-target">
+                            Leave Room
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Players Status -->
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 fade-in">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4">Players</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="playersContainer">
+                    <!-- Players will be populated by JavaScript -->
+                </div>
+                <div class="mt-4 text-center">
+                    <button id="readyBtn" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium mobile-friendly touch-target hidden">
+                        Ready
+                    </button>
+                    <button id="startGameBtn" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium mobile-friendly touch-target hidden">
+                        Start Game
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Area -->
+    <div id="gameArea" class="hidden">
+        <!-- Game Status -->
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 fade-in">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Player 1 Stats -->
+                    <div class="text-center p-4 bg-blue-50 dark:bg-blue-900 rounded-lg">
+                        <h4 class="font-semibold text-blue-800 dark:text-blue-200 mb-2" id="player1Name">Player 1</h4>
+                        <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1" id="player1Moves">0</div>
+                        <div class="text-sm text-blue-600 dark:text-blue-400">Moves</div>
+                        <div class="text-lg font-semibold text-blue-600 dark:text-blue-400 mt-2" id="player1Timer">00:00</div>
+                    </div>
+                    
+                    <!-- Player 2 Stats -->
+                    <div class="text-center p-4 bg-green-50 dark:bg-green-900 rounded-lg">
+                        <h4 class="font-semibold text-green-800 dark:text-green-200 mb-2" id="player2Name">Player 2</h4>
+                        <div class="text-2xl font-bold text-green-600 dark:text-green-400 mb-1" id="player2Moves">0</div>
+                        <div class="text-sm text-green-600 dark:text-green-400">Moves</div>
+                        <div class="text-lg font-semibold text-green-600 dark:text-green-400 mt-2" id="player2Timer">00:00</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Board -->
+        <div class="max-w-5xl mx-auto px-4 sm:px-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-8 fade-in">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8" id="gameBoard">
+                    <!-- Peg 1 -->
+                    <div class="peg-container mobile-friendly">
+                        <div class="text-center mb-2 sm:mb-4">
+                            <h3 class="text-sm sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Start</h3>
+                        </div>
+                        <div class="peg relative bg-gradient-to-b from-amber-100 to-amber-200 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 min-h-80" 
+                             data-peg="0" ondrop="drop(event)" ondragover="allowDrop(event)">
+                            <!-- Vertical peg rod -->
+                            <div class="absolute left-1/2 top-4 bottom-4 w-2 bg-amber-600 dark:bg-amber-500 rounded-full transform -translate-x-1/2"></div>
+                            <!-- Base -->
+                            <div class="absolute bottom-2 left-2 right-2 h-4 bg-amber-700 dark:bg-amber-600 rounded-lg"></div>
+                        </div>
+                    </div>
+
+                    <!-- Peg 2 -->
+                    <div class="peg-container mobile-friendly">
+                        <div class="text-center mb-2 sm:mb-4">
+                            <h3 class="text-sm sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Auxiliary</h3>
+                        </div>
+                        <div class="peg relative bg-gradient-to-b from-blue-100 to-blue-200 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 min-h-80" 
+                             data-peg="1" ondrop="drop(event)" ondragover="allowDrop(event)">
+                            <!-- Vertical peg rod -->
+                            <div class="absolute left-1/2 top-4 bottom-4 w-2 bg-blue-600 dark:bg-blue-500 rounded-full transform -translate-x-1/2"></div>
+                            <!-- Base -->
+                            <div class="absolute bottom-2 left-2 right-2 h-4 bg-blue-700 dark:bg-blue-600 rounded-lg"></div>
+                        </div>
+                    </div>
+
+                    <!-- Peg 3 -->
+                    <div class="peg-container mobile-friendly">
+                        <div class="text-center mb-2 sm:mb-4">
+                            <h3 class="text-sm sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Destination</h3>
+                        </div>
+                        <div class="peg relative bg-gradient-to-b from-green-100 to-green-200 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 min-h-80" 
+                             data-peg="2" ondrop="drop(event)" ondragover="allowDrop(event)">
+                            <!-- Vertical peg rod -->
+                            <div class="absolute left-1/2 top-4 bottom-4 w-2 bg-green-600 dark:bg-green-500 rounded-full transform -translate-x-1/2"></div>
+                            <!-- Base -->
+                            <div class="absolute bottom-2 left-2 right-2 h-4 bg-green-700 dark:bg-green-600 rounded-lg"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Instructions -->
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 mt-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 fade-in">
+                <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-white mb-3">Multiplayer Rules</h3>
+                <ul class="instructions text-gray-600 dark:text-gray-400 space-y-2 text-xs sm:text-sm">
+                    <li>• Move all disks from Start to Destination peg</li>
+                    <li>• Only one disk at a time, larger cannot go on smaller</li>
+                    <li>• <strong>First player to complete wins!</strong></li>
+                    <li>• If both finish, player with fewer moves wins</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Winner Modal -->
+    <div id="winnerModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="modal-content bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 sm:p-8 max-w-md mx-4 text-center mobile-friendly">
+            <div class="text-4xl sm:text-6xl mb-4" id="winnerEmoji">🏆</div>
+            <h2 class="modal-title text-xl sm:text-2xl font-bold text-gray-800 dark:text-white mb-4" id="winnerTitle">Game Over!</h2>
+            <p class="modal-text text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-6" id="winnerMessage">
+                <!-- Winner message will be populated by JavaScript -->
+            </p>
+            <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-6" id="winnerStats">
+                <!-- Winner stats will be populated by JavaScript -->
+            </div>
+            <button id="newGameBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors mobile-friendly touch-target">
+                New Game
+            </button>
+        </div>
+    </div>
+
+    <!-- Include the multiplayer game script -->
+    <script src="{{ url_for('static', filename='multiplayer.js') }}"></script>
+    <script>
+        // Handle game mode selection
+        document.addEventListener('DOMContentLoaded', function() {
+            const gameModeSelect = document.getElementById('gameModeSelect');
+            const maxPlayersContainer = document.getElementById('maxPlayersContainer');
+            const joinRoleSelect = document.getElementById('joinRoleSelect');
+            const teamSelectContainer = document.getElementById('teamSelectContainer');
+            
+            gameModeSelect.addEventListener('change', function() {
+                const mode = this.value;
+                const maxPlayersSelect = document.getElementById('maxPlayersSelect');
+                
+                if (mode === 'tournament') {
+                    maxPlayersContainer.style.display = 'block';
+                    // Set tournament options (3-8 players)
+                    maxPlayersSelect.innerHTML = `
+                        <option value="3">3 Players</option>
+                        <option value="4">4 Players</option>
+                        <option value="5">5 Players</option>
+                        <option value="6">6 Players</option>
+                        <option value="7">7 Players</option>
+                        <option value="8">8 Players</option>
+                    `;
+                } else if (mode === 'team') {
+                    maxPlayersContainer.style.display = 'block';
+                    // Set team options (4-6 players)
+                    maxPlayersSelect.innerHTML = `
+                        <option value="4">4 Players (2v2)</option>
+                        <option value="6">6 Players (3v3)</option>
+                    `;
+                } else {
+                    maxPlayersContainer.style.display = 'none';
+                }
+            });
+            
+            joinRoleSelect.addEventListener('change', function() {
+                const role = this.value;
+                if (role === 'player') {
+                    teamSelectContainer.style.display = 'block';
+                } else {
+                    teamSelectContainer.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

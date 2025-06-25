@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower of Hanoi - Interactive Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
+    <!-- Header -->
+    <header class="p-4 sm:p-6 text-center">
+        <div class="header-container flex justify-between items-center max-w-4xl mx-auto">
+            <h1 class="game-title text-2xl sm:text-4xl font-bold text-gray-800 dark:text-white">
+                🗼 Tower of Hanoi
+            </h1>
+            <button id="darkModeToggle" class="dark-mode-toggle p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors mobile-friendly touch-target">
+                <span class="text-xl">🌙</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Game Controls -->
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 mb-6 sm:mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 fade-in">
+            <div class="stats-container flex flex-wrap justify-between items-center gap-4">
+                <!-- Game Stats -->
+                <div class="stats-row flex gap-4 sm:gap-6">
+                    <div class="text-center">
+                        <div class="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400" id="moveCounter">0</div>
+                        <div class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Moves</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400" id="timer">00:00</div>
+                        <div class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Time</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400" id="minMoves">7</div>
+                        <div class="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Min Moves</div>
+                    </div>
+                </div>
+
+                <!-- Game Controls -->
+                <div class="control-row button-group flex gap-2 sm:gap-3">
+                    <select id="diskCount" class="game-button px-3 sm:px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 mobile-friendly">
+                        <option value="3">3 Disks</option>
+                        <option value="4" selected>4 Disks</option>
+                        <option value="5">5 Disks</option>
+                        <option value="6">6 Disks</option>
+                        <option value="7">7 Disks</option>
+                    </select>
+                    <button id="newGameBtn" class="game-button px-4 sm:px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium mobile-friendly touch-target">
+                        New Game
+                    </button>
+                    <button id="resetBtn" class="game-button px-4 sm:px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium mobile-friendly touch-target">
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Board -->
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-8 fade-in">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-8" id="gameBoard">
+                <!-- Peg 1 -->
+                <div class="peg-container mobile-friendly">
+                    <div class="text-center mb-2 sm:mb-4">
+                        <h3 class="text-sm sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Start</h3>
+                    </div>
+                    <div class="peg relative bg-gradient-to-b from-amber-100 to-amber-200 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 min-h-80" 
+                         data-peg="0" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Vertical peg rod -->
+                        <div class="absolute left-1/2 top-4 bottom-4 w-2 bg-amber-600 dark:bg-amber-500 rounded-full transform -translate-x-1/2"></div>
+                        <!-- Base -->
+                        <div class="absolute bottom-2 left-2 right-2 h-4 bg-amber-700 dark:bg-amber-600 rounded-lg"></div>
+                    </div>
+                </div>
+
+                <!-- Peg 2 -->
+                <div class="peg-container mobile-friendly">
+                    <div class="text-center mb-2 sm:mb-4">
+                        <h3 class="text-sm sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Auxiliary</h3>
+                    </div>
+                    <div class="peg relative bg-gradient-to-b from-blue-100 to-blue-200 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 min-h-80" 
+                         data-peg="1" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Vertical peg rod -->
+                        <div class="absolute left-1/2 top-4 bottom-4 w-2 bg-blue-600 dark:bg-blue-500 rounded-full transform -translate-x-1/2"></div>
+                        <!-- Base -->
+                        <div class="absolute bottom-2 left-2 right-2 h-4 bg-blue-700 dark:bg-blue-600 rounded-lg"></div>
+                    </div>
+                </div>
+
+                <!-- Peg 3 -->
+                <div class="peg-container mobile-friendly">
+                    <div class="text-center mb-2 sm:mb-4">
+                        <h3 class="text-sm sm:text-lg font-semibold text-gray-700 dark:text-gray-300">Destination</h3>
+                    </div>
+                    <div class="peg relative bg-gradient-to-b from-green-100 to-green-200 dark:from-gray-700 dark:to-gray-600 rounded-lg p-4 min-h-80" 
+                         data-peg="2" ondrop="drop(event)" ondragover="allowDrop(event)">
+                        <!-- Vertical peg rod -->
+                        <div class="absolute left-1/2 top-4 bottom-4 w-2 bg-green-600 dark:bg-green-500 rounded-full transform -translate-x-1/2"></div>
+                        <!-- Base -->
+                        <div class="absolute bottom-2 left-2 right-2 h-4 bg-green-700 dark:bg-green-600 rounded-lg"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 mt-6 sm:mt-8 mb-6 sm:mb-8">
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 sm:p-6 fade-in">
+            <h3 class="text-base sm:text-lg font-semibold text-gray-800 dark:text-white mb-3">How to Play</h3>
+            <ul class="instructions text-gray-600 dark:text-gray-400 space-y-2 text-xs sm:text-sm">
+                <li>• Move all disks from the Start peg to the Destination peg</li>
+                <li>• You can only move one disk at a time</li>
+                <li>• A larger disk cannot be placed on top of a smaller disk</li>
+                <li>• Try to complete the puzzle in the minimum number of moves!</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="modal-content bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 sm:p-8 max-w-md mx-4 text-center mobile-friendly">
+            <div class="text-4xl sm:text-6xl mb-4">🎉</div>
+            <h2 class="modal-title text-xl sm:text-2xl font-bold text-gray-800 dark:text-white mb-4">Congratulations!</h2>
+            <p class="modal-text text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-6">
+                You solved the Tower of Hanoi puzzle!
+            </p>
+            <div class="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 mb-6">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <div class="font-semibold text-blue-600 dark:text-blue-400" id="finalMoves">0</div>
+                        <div class="text-gray-600 dark:text-gray-400">Moves</div>
+                    </div>
+                    <div>
+                        <div class="font-semibold text-green-600 dark:text-green-400" id="finalTime">00:00</div>
+                        <div class="text-gray-600 dark:text-gray-400">Time</div>
+                    </div>
+                </div>
+            </div>
+            <button id="playAgainBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors mobile-friendly touch-target">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import uuid
 import time
 from datetime import datetime
 import json
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
@@ -694,4 +695,11 @@ def handle_switch_to_player(data):
             emit('player_switch_failed', {'error': 'Room is full or game started'})
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('DEBUG', 'False').lower() == 'true'
+    
+    socketio.run(app, 
+                debug=debug, 
+                host='0.0.0.0', 
+                port=port,
+                allow_unsafe_werkzeug=True)

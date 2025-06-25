@@ -9,6 +9,7 @@ class MultiplayerTowerOfHanoi {
         this.playerTeam = null;      // 'A', 'B', or null
         this.isRoomCreator = false;
         this.gameStarted = false;
+        this.gameFinished = false;
         this.gameMode = 'classic';   // 'classic', 'tournament', 'team', 'spectator'
         this.maxPlayers = 2;
         this.opponentMoves = 0;
@@ -34,7 +35,10 @@ class MultiplayerTowerOfHanoi {
         const urlPath = window.location.pathname;
         const roomMatch = urlPath.match(/\/room\/([a-zA-Z0-9]+)/);
         if (roomMatch) {
-            document.getElementById('roomIdInput').value = roomMatch[1];
+            const roomIdInput = document.getElementById('roomIdInput');
+            if (roomIdInput) {
+                roomIdInput.value = roomMatch[1];
+            }
         }
     }
 
@@ -86,15 +90,24 @@ class MultiplayerTowerOfHanoi {
     }
 
     initializeUI() {
-        // Room creation/joining
-        document.getElementById('createRoomBtn').addEventListener('click', () => this.createRoom());
-        document.getElementById('joinRoomBtn').addEventListener('click', () => this.joinRoom());
-        document.getElementById('readyBtn').addEventListener('click', () => this.playerReady());
-        document.getElementById('startGameBtn').addEventListener('click', () => this.startGame());
-        document.getElementById('copyInviteBtn').addEventListener('click', () => this.copyInviteLink());
-        document.getElementById('leaveRoomBtn').addEventListener('click', () => this.leaveRoom());
-        document.getElementById('newGameBtn').addEventListener('click', () => this.newGame());
-        document.getElementById('darkModeToggle').addEventListener('click', () => this.toggleDarkMode());
+        // Room creation/joining - with null checks
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
+        const readyBtn = document.getElementById('readyBtn');
+        const startGameBtn = document.getElementById('startGameBtn');
+        const copyInviteBtn = document.getElementById('copyInviteBtn');
+        const leaveRoomBtn = document.getElementById('leaveRoomBtn');
+        const newGameBtn = document.getElementById('newGameBtn');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        
+        if (createRoomBtn) createRoomBtn.addEventListener('click', () => this.createRoom());
+        if (joinRoomBtn) joinRoomBtn.addEventListener('click', () => this.joinRoom());
+        if (readyBtn) readyBtn.addEventListener('click', () => this.playerReady());
+        if (startGameBtn) startGameBtn.addEventListener('click', () => this.startGame());
+        if (copyInviteBtn) copyInviteBtn.addEventListener('click', () => this.copyInviteLink());
+        if (leaveRoomBtn) leaveRoomBtn.addEventListener('click', () => this.leaveRoom());
+        if (newGameBtn) newGameBtn.addEventListener('click', () => this.newGame());
+        if (darkModeToggle) darkModeToggle.addEventListener('click', () => this.toggleDarkMode());
         
         // Game control buttons
         const forfeitBtn = document.getElementById('forfeitBtn');
@@ -105,22 +118,30 @@ class MultiplayerTowerOfHanoi {
         if (leaveGameBtn) leaveGameBtn.addEventListener('click', () => this.leaveRoom());
 
         // Enter key support
-        document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const roomId = document.getElementById('roomIdInput').value.trim();
-                if (roomId) {
-                    this.joinRoom();
-                } else {
-                    this.createRoom();
+        const playerNameInput = document.getElementById('playerNameInput');
+        const roomIdInput = document.getElementById('roomIdInput');
+        
+        if (playerNameInput) {
+            playerNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const roomIdInputEl = document.getElementById('roomIdInput');
+                    const roomId = roomIdInputEl ? roomIdInputEl.value.trim() : '';
+                    if (roomId) {
+                        this.joinRoom();
+                    } else {
+                        this.createRoom();
+                    }
                 }
-            }
-        });
+            });
+        }
 
-        document.getElementById('roomIdInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.joinRoom();
-            }
-        });
+        if (roomIdInput) {
+            roomIdInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.joinRoom();
+                }
+            });
+        }
     }
 
     initializeSocketEvents() {
@@ -170,10 +191,21 @@ class MultiplayerTowerOfHanoi {
     }
 
     async createRoom() {
-        const playerName = document.getElementById('playerNameInput').value.trim();
-        const diskCount = parseInt(document.getElementById('diskCountSelect').value);
-        const gameMode = document.getElementById('gameModeSelect').value;
-        const maxPlayers = parseInt(document.getElementById('maxPlayersSelect').value) || 2;
+        const playerNameInput = document.getElementById('playerNameInput');
+        const diskCountSelect = document.getElementById('diskCountSelect');
+        const gameModeSelect = document.getElementById('gameModeSelect');
+        const maxPlayersSelect = document.getElementById('maxPlayersSelect');
+        
+        if (!playerNameInput) {
+            console.error('Player name input not found');
+            alert('Error: Unable to find player name input field');
+            return;
+        }
+        
+        const playerName = playerNameInput.value.trim();
+        const diskCount = diskCountSelect ? parseInt(diskCountSelect.value) : 4;
+        const gameMode = gameModeSelect ? gameModeSelect.value : 'classic';
+        const maxPlayers = maxPlayersSelect ? parseInt(maxPlayersSelect.value) || 2 : 2;
         
         if (!playerName) {
             alert('Please enter your name');
@@ -192,7 +224,16 @@ class MultiplayerTowerOfHanoi {
                 })
             });
 
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
+            
+            if (!data) {
+                throw new Error('No data received from server');
+            }
+
             if (data.success) {
                 this.roomId = data.room_id;
                 this.playerId = data.player_id;
@@ -206,18 +247,36 @@ class MultiplayerTowerOfHanoi {
                 this.hideRoomModal();
                 this.showLobby();
             } else {
-                alert('Failed to create room: ' + data.error);
+                alert('Failed to create room: ' + (data.error || 'Unknown error'));
             }
         } catch (error) {
+            console.error('Create room error:', error);
             alert('Error creating room: ' + error.message);
         }
     }
 
     async joinRoom() {
-        const playerName = document.getElementById('playerNameInput').value.trim();
-        const roomId = document.getElementById('roomIdInput').value.trim();
-        const role = document.getElementById('joinRoleSelect').value;
-        const team = document.getElementById('teamSelect').value;
+        const playerNameInput = document.getElementById('playerNameInput');
+        const roomIdInput = document.getElementById('roomIdInput');
+        const joinRoleSelect = document.getElementById('joinRoleSelect');
+        const teamSelect = document.getElementById('teamSelect');
+        
+        if (!playerNameInput) {
+            console.error('Player name input not found');
+            alert('Error: Unable to find player name input field');
+            return;
+        }
+        
+        if (!roomIdInput) {
+            console.error('Room ID input not found');
+            alert('Error: Unable to find room ID input field');
+            return;
+        }
+        
+        const playerName = playerNameInput.value.trim();
+        const roomId = roomIdInput.value.trim();
+        const role = joinRoleSelect ? joinRoleSelect.value : 'player';
+        const team = teamSelect ? teamSelect.value : 'A';
         
         if (!playerName) {
             alert('Please enter your name');
@@ -241,7 +300,16 @@ class MultiplayerTowerOfHanoi {
                 })
             });
 
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
+            
+            if (!data) {
+                throw new Error('No data received from server');
+            }
+
             if (data.success) {
                 this.roomId = data.room_id;
                 this.playerId = data.player_id;
@@ -254,9 +322,10 @@ class MultiplayerTowerOfHanoi {
                 this.hideRoomModal();
                 this.showLobby();
             } else {
-                alert('Failed to join room: ' + data.error);
+                alert('Failed to join room: ' + (data.error || 'Unknown error'));
             }
         } catch (error) {
+            console.error('Join room error:', error);
             alert('Error joining room: ' + error.message);
         }
     }
@@ -266,6 +335,48 @@ class MultiplayerTowerOfHanoi {
             room_id: this.roomId,
             player_id: this.playerId
         });
+    }
+
+    // UI Management Methods
+    hideRoomModal() {
+        const modal = document.getElementById('roomModal');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    showLobby() {
+        const lobby = document.getElementById('gameLobby');
+        if (lobby) {
+            lobby.classList.remove('hidden');
+        }
+        this.updateRoomInfo();
+    }
+
+    showGameArea() {
+        const gameArea = document.getElementById('gameArea');
+        const lobby = document.getElementById('gameLobby');
+        
+        if (gameArea) {
+            gameArea.classList.remove('hidden');
+        }
+        if (lobby) {
+            lobby.classList.add('hidden');
+        }
+    }
+
+    updateRoomInfo() {
+        if (this.roomId) {
+            const roomIdElement = document.getElementById('currentRoomId');
+            const diskCountElement = document.getElementById('currentDiskCount');
+            
+            if (roomIdElement) {
+                roomIdElement.textContent = this.roomId;
+            }
+            if (diskCountElement) {
+                diskCountElement.textContent = this.diskCount;
+            }
+        }
     }
 
     playerReady() {
@@ -283,12 +394,41 @@ class MultiplayerTowerOfHanoi {
     }
 
     updateRoomInfo(roomInfo) {
-        document.getElementById('currentRoomId').textContent = roomInfo.room_id;
-        document.getElementById('currentDiskCount').textContent = roomInfo.disk_count;
+        if (!roomInfo) {
+            // Basic room info update
+            if (this.roomId) {
+                const roomIdElement = document.getElementById('currentRoomId');
+                const diskCountElement = document.getElementById('currentDiskCount');
+                
+                if (roomIdElement) {
+                    roomIdElement.textContent = this.roomId;
+                }
+                if (diskCountElement) {
+                    diskCountElement.textContent = this.diskCount;
+                }
+            }
+            return;
+        }
+
+        // Detailed room info update with player data
+        const currentRoomIdEl = document.getElementById('currentRoomId');
+        const currentDiskCountEl = document.getElementById('currentDiskCount');
+        
+        if (currentRoomIdEl) {
+            currentRoomIdEl.textContent = roomInfo.room_id;
+        }
+        if (currentDiskCountEl) {
+            currentDiskCountEl.textContent = roomInfo.disk_count;
+        }
         this.diskCount = roomInfo.disk_count;
 
         // Update players display
         const container = document.getElementById('playersContainer');
+        if (!container) {
+            console.error('Players container not found');
+            return;
+        }
+        
         container.innerHTML = '';
 
         Object.entries(roomInfo.players).forEach(([playerId, playerInfo]) => {
@@ -349,14 +489,23 @@ class MultiplayerTowerOfHanoi {
 
     onGameStarted(data) {
         this.gameStarted = true;
+        this.gameFinished = false;
         this.diskCount = data.disk_count;
         this.initializeGame();
         this.showGameArea();
         
         // Set up player names in game area
         const players = Object.values(data.room_info.players);
-        document.getElementById('player1Name').textContent = this.playerName;
-        document.getElementById('player2Name').textContent = players.find(p => p.name !== this.playerName)?.name || 'Opponent';
+        const player1NameEl = document.getElementById('player1Name');
+        const player2NameEl = document.getElementById('player2Name');
+        
+        if (player1NameEl) {
+            player1NameEl.textContent = this.playerName;
+        }
+        if (player2NameEl) {
+            const opponentName = players.find(p => p.name !== this.playerName)?.name || 'Opponent';
+            player2NameEl.textContent = opponentName;
+        }
     }
 
     initializeGame() {
@@ -381,20 +530,36 @@ class MultiplayerTowerOfHanoi {
             'bg-purple-500 border-purple-600'
         ];
 
-        // Clear existing disks
-        document.querySelectorAll('.disk').forEach(disk => disk.remove());
+        try {
+            // Clear existing disks
+            const existingDisks = document.querySelectorAll('.disk');
+            if (existingDisks) {
+                existingDisks.forEach(disk => disk.remove());
+            }
 
-        // Create disks on the first peg
-        for (let i = 0; i < count; i++) {
-            const disk = {
-                id: i,
-                size: count - i,
-                element: this.createDiskElement(i, count - i, colors[i % colors.length])
-            };
-            this.pegs[0].push(disk);
+            // Create disks on the first peg
+            for (let i = 0; i < count; i++) {
+                const disk = {
+                    id: i,
+                    size: count - i,
+                    element: this.createDiskElement(i, count - i, colors[i % colors.length])
+                };
+                this.pegs[0].push(disk);
+            }
+
+            this.renderDisks();
+        } catch (error) {
+            console.error('Error creating disks:', error);
+            // Fallback: try to clear any existing disks individually
+            try {
+                const disks = document.getElementsByClassName('disk');
+                while (disks.length > 0) {
+                    disks[0].remove();
+                }
+            } catch (fallbackError) {
+                console.error('Fallback disk cleanup failed:', fallbackError);
+            }
         }
-
-        this.renderDisks();
     }
 
     createDiskElement(id, size, colorClass) {
@@ -417,6 +582,8 @@ class MultiplayerTowerOfHanoi {
 
         if (this.isMobile) {
             disk.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+            disk.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+            disk.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
         } else {
             disk.addEventListener('dragstart', (e) => this.handleDragStart(e));
             disk.addEventListener('dragend', (e) => this.handleDragEnd(e));
@@ -426,21 +593,38 @@ class MultiplayerTowerOfHanoi {
     }
 
     renderDisks() {
-        const pegElements = document.querySelectorAll('.peg');
-        
-        this.pegs.forEach((peg, pegIndex) => {
-            const pegElement = pegElements[pegIndex];
+        try {
+            const pegElements = document.querySelectorAll('.peg');
+            if (!pegElements || pegElements.length < 3) {
+                console.error('Could not find required peg elements');
+                return;
+            }
             
-            peg.forEach((disk, diskIndex) => {
-                const diskElement = disk.element;
-                pegElement.appendChild(diskElement);
+            this.pegs.forEach((peg, pegIndex) => {
+                const pegElement = pegElements[pegIndex];
+                if (!pegElement) {
+                    console.error(`Peg element ${pegIndex} not found`);
+                    return;
+                }
                 
-                const bottom = 20 + (diskIndex * 26);
-                diskElement.style.bottom = `${bottom}px`;
-                diskElement.style.left = '50%';
-                diskElement.style.transform = 'translateX(-50%)';
+                peg.forEach((disk, diskIndex) => {
+                    if (!disk || !disk.element) {
+                        console.error(`Invalid disk at peg ${pegIndex}, disk ${diskIndex}`);
+                        return;
+                    }
+                    
+                    const diskElement = disk.element;
+                    pegElement.appendChild(diskElement);
+                    
+                    const bottom = 20 + (diskIndex * 26);
+                    diskElement.style.bottom = `${bottom}px`;
+                    diskElement.style.left = '50%';
+                    diskElement.style.transform = 'translateX(-50%)';
+                });
             });
-        });
+        } catch (error) {
+            console.error('Error rendering disks:', error);
+        }
     }
 
     // Touch and drag handlers (adapted from original game)
@@ -465,26 +649,138 @@ class MultiplayerTowerOfHanoi {
         }
     }
 
-    handleDragStart(e) {
-        const diskId = parseInt(e.target.dataset.diskId);
-        const pegIndex = this.findDiskPeg(diskId);
-        
-        if (pegIndex !== -1 && this.isTopDisk(diskId, pegIndex)) {
-            e.dataTransfer.setData('text/plain', diskId);
-            e.target.classList.add('dragging');
-        } else {
+    handleTouchMove(e) {
+        try {
+            if (!this.draggedDisk) return;
+            
             e.preventDefault();
-            this.showInvalidMoveAnimation(e.target);
+            const touch = e.touches[0];
+            
+            // Move the disk element to follow the touch
+            const rect = this.draggedDisk.getBoundingClientRect();
+            const offsetX = touch.clientX - this.touchStartPos.x;
+            const offsetY = touch.clientY - this.touchStartPos.y;
+            
+            this.draggedDisk.style.transform = `translateX(calc(-50% + ${offsetX}px)) translateY(${offsetY}px)`;
+            this.draggedDisk.style.zIndex = '1000';
+        } catch (error) {
+            console.warn('Touch move error:', error);
+        }
+    }
+
+    handleTouchEnd(e) {
+        try {
+            if (!this.draggedDisk) return;
+            
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            
+            // Find which peg the touch ended on
+            const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+            const peg = elementBelow ? elementBelow.closest('.peg') : null;
+            
+            if (peg) {
+                const pegIndex = parseInt(peg.dataset.peg);
+                const diskId = parseInt(this.draggedDisk.dataset.diskId);
+                
+                if (this.moveDisk(diskId, pegIndex)) {
+                    // Move successful
+                } else {
+                    // Move failed - show invalid animation
+                    peg.classList.add('invalid-drop');
+                    setTimeout(() => peg.classList.remove('invalid-drop'), 500);
+                }
+            }
+            
+            // Clean up
+            this.draggedDisk.classList.remove('dragging');
+            this.draggedDisk.style.transform = 'translateX(-50%)';
+            this.draggedDisk.style.zIndex = '';
+            this.draggedDisk = null;
+        } catch (error) {
+            console.warn('Touch end error:', error);
+        }
+    }
+
+    // Drag and drop handlers
+    handleDragStart(e) {
+        try {
+            const diskId = parseInt(e.target.dataset.diskId);
+            const pegIndex = this.findDiskPeg(diskId);
+            
+            if (pegIndex !== -1 && this.isTopDisk(diskId, pegIndex)) {
+                e.dataTransfer.setData('text/plain', diskId);
+                e.target.classList.add('dragging');
+                this.draggedDisk = e.target;
+            } else {
+                e.preventDefault();
+                this.showInvalidMoveAnimation(e.target);
+            }
+        } catch (error) {
+            console.warn('Drag start error:', error);
+            e.preventDefault();
         }
     }
 
     handleDragEnd(e) {
-        e.target.classList.remove('dragging');
+        try {
+            e.target.classList.remove('dragging');
+            this.draggedDisk = null;
+        } catch (error) {
+            console.warn('Drag end error:', error);
+        }
     }
 
+    // Timer methods
+    startTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+        }
+        this.startTime = Date.now();
+        this.timerInterval = setInterval(() => {
+            this.updateTimer();
+        }, 100);
+    }
+
+    stopTimer() {
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+            this.timerInterval = null;
+        }
+    }
+
+    updateTimer() {
+        if (!this.startTime) return;
+        const elapsed = Date.now() - this.startTime;
+        const seconds = Math.floor(elapsed / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const displaySeconds = seconds % 60;
+        const timeStr = `${minutes.toString().padStart(2, '0')}:${displaySeconds.toString().padStart(2, '0')}`;
+        
+        const timerElement = document.getElementById('player1Timer');
+        if (timerElement) {
+            timerElement.textContent = timeStr;
+        }
+    }
+
+    // Display update methods
+    updateDisplay() {
+        this.updateMoveCounter();
+        this.updateTimer();
+    }
+
+    updateMoveCounter() {
+        const moveElement = document.getElementById('player1Moves');
+        if (moveElement) {
+            moveElement.textContent = this.moves;
+        }
+    }
+
+    // Game logic methods
     findDiskPeg(diskId) {
         for (let i = 0; i < this.pegs.length; i++) {
-            if (this.pegs[i].some(disk => disk.id === diskId)) {
+            const diskIndex = this.pegs[i].findIndex(disk => disk.id === diskId);
+            if (diskIndex !== -1) {
                 return i;
             }
         }
@@ -492,14 +788,20 @@ class MultiplayerTowerOfHanoi {
     }
 
     isTopDisk(diskId, pegIndex) {
+        if (pegIndex < 0 || pegIndex >= this.pegs.length) return false;
         const peg = this.pegs[pegIndex];
-        return peg.length > 0 && peg[peg.length - 1].id === diskId;
+        if (peg.length === 0) return false;
+        return peg[peg.length - 1].id === diskId;
     }
 
     moveDisk(diskId, targetPegIndex) {
         const sourcePegIndex = this.findDiskPeg(diskId);
         
-        if (sourcePegIndex === -1 || sourcePegIndex === targetPegIndex) {
+        if (sourcePegIndex === -1 || !this.isTopDisk(diskId, sourcePegIndex)) {
+            return false;
+        }
+
+        if (sourcePegIndex === targetPegIndex) {
             return false;
         }
 
@@ -507,145 +809,125 @@ class MultiplayerTowerOfHanoi {
         const targetPeg = this.pegs[targetPegIndex];
         const disk = sourcePeg[sourcePeg.length - 1];
 
-        if (disk.id !== diskId) {
+        // Check if move is valid (can't place larger disk on smaller one)
+        if (targetPeg.length > 0 && disk.size > targetPeg[targetPeg.length - 1].size) {
             return false;
         }
 
-        if (targetPeg.length > 0 && targetPeg[targetPeg.length - 1].size < disk.size) {
-            return false;
-        }
-
-        sourcePeg.pop();
-        targetPeg.push(disk);
-        
+        // Make the move
+        const movedDisk = sourcePeg.pop();
+        targetPeg.push(movedDisk);
         this.moves++;
-        this.updateDisplay();
+
+        // Emit move to server for multiplayer
+        if (this.roomId && this.playerId) {
+            this.socket.emit('player_move', {
+                room_id: this.roomId,
+                player_id: this.playerId,
+                from_peg: sourcePegIndex,
+                to_peg: targetPegIndex,
+                moves: this.moves
+            });
+        }
+
         this.renderDisks();
+        this.updateDisplay();
+
+        // Check for win condition
+        if (this.checkWin()) {
+            this.onGameWin();
+        }
+
+        return true;
+    }
+
+    checkWin() {
+        // Win condition: all disks on the last peg
+        return this.pegs[2].length === this.diskCount;
+    }
+
+    onGameWin() {
+        this.gameFinished = true;
+        this.stopTimer();
         
-        // Emit move to server
-        this.socket.emit('game_move', {
-            room_id: this.roomId,
-            player_id: this.playerId,
-            moves: this.moves
-        });
-        
-        // Check win condition
-        if (this.checkWinCondition()) {
-            const timeTaken = Math.floor((Date.now() - this.startTime) / 1000);
+        if (this.roomId && this.playerId) {
             this.socket.emit('game_finished', {
                 room_id: this.roomId,
                 player_id: this.playerId,
                 moves: this.moves,
-                time_taken: timeTaken
+                time: Date.now() - this.startTime
             });
         }
-        
-        return true;
     }
 
-    checkWinCondition() {
-        const lastPeg = this.pegs[2];
-        if (lastPeg.length === this.diskCount) {
-            for (let i = 0; i < lastPeg.length - 1; i++) {
-                if (lastPeg[i].size < lastPeg[i + 1].size) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
-    startTimer() {
-        this.timerInterval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-            const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            document.getElementById('player1Timer').textContent = timeString;
-        }, 1000);
-    }
-
-    updateDisplay() {
-        document.getElementById('player1Moves').textContent = this.moves;
-    }
-
+    // Socket event handlers
     updateOpponentMoves(data) {
-        if (data.player_id !== this.playerId) {
-            this.opponentMoves = data.moves;
-            document.getElementById('player2Moves').textContent = this.opponentMoves;
+        this.opponentMoves = data.moves;
+        const opponentMovesElement = document.getElementById('player2Moves');
+        if (opponentMovesElement) {
+            opponentMovesElement.textContent = this.opponentMoves;
         }
     }
 
     onGameEnded(data) {
-        clearInterval(this.timerInterval);
+        this.gameFinished = true;
+        this.stopTimer();
         
-        const isWinner = data.winner === this.playerName;
-        const modal = document.getElementById('winnerModal');
-        const emoji = document.getElementById('winnerEmoji');
-        const title = document.getElementById('winnerTitle');
-        const message = document.getElementById('winnerMessage');
-        const stats = document.getElementById('winnerStats');
+        // Show game result
+        const winner = data.winner;
+        const isWinner = winner && winner.player_id === this.playerId;
         
-        emoji.textContent = isWinner ? '🏆' : '😔';
-        title.textContent = isWinner ? 'You Won!' : 'You Lost!';
-        
-        // Handle forfeit scenarios
-        if (data.forfeit) {
-            if (data.left_game) {
-                message.textContent = isWinner ? 
-                    `${data.loser} left the game. You win by default!` :
-                    `You left the game.`;
+        let message = '';
+        if (data.forfeit && data.left_game) {
+            if (isWinner) {
+                message = `🎉 You won! Your opponent left the game.`;
             } else {
-                message.textContent = isWinner ? 
-                    `${data.loser} forfeited the game. You win!` :
-                    `You forfeited the game.`;
+                message = `Game ended - a player left the game.`;
             }
-            stats.innerHTML = `
-                <div class="text-center text-lg">
-                    <div class="font-semibold text-${isWinner ? 'green' : 'red'}-600 dark:text-${isWinner ? 'green' : 'red'}-400">
-                        ${data.forfeit ? 'Game Ended by Forfeit' : 'Normal Victory'}
-                    </div>
-                </div>
-            `;
+        } else if (data.forfeit) {
+            if (isWinner) {
+                message = `🎉 You won! Your opponent forfeited.`;
+            } else {
+                message = `You forfeited the game.`;
+            }
+        } else if (isWinner) {
+            message = `🎉 Congratulations! You won in ${this.moves} moves!`;
+        } else if (winner) {
+            message = `😔 ${winner.player_name} won the game!`;
         } else {
-            message.textContent = isWinner ? 
-                `Congratulations! You completed the puzzle first!` :
-                `${data.winner} completed the puzzle first.`;
-            
-            stats.innerHTML = `
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <div class="font-semibold text-${isWinner ? 'green' : 'blue'}-600 dark:text-${isWinner ? 'green' : 'blue'}-400">${data.winner_moves}</div>
-                        <div class="text-gray-600 dark:text-gray-400">Winner's Moves</div>
-                    </div>
-                    <div>
-                        <div class="font-semibold text-${isWinner ? 'green' : 'blue'}-600 dark:text-${isWinner ? 'green' : 'blue'}-400">${data.winner_time}s</div>
-                        <div class="text-gray-600 dark:text-gray-400">Winner's Time</div>
-                    </div>
-                </div>
-            `;
+            message = 'Game ended';
         }
         
-        modal.classList.remove('hidden');
+        this.showMessage(message, isWinner ? 'success' : (data.forfeit ? 'warning' : 'info'));
+        
+        // Show option to start a new game or leave room
+        setTimeout(() => {
+            if (confirm('Game ended. Would you like to start a new game?')) {
+                this.newGame();
+            }
+        }, 2000);
     }
 
     onPlayerLeft(data) {
-        alert('Your opponent has left the game.');
-        this.leaveRoom();
+        this.showMessage(`${data.player_name} left the game`, 'warning');
+        
+        // If game was active and only one player remains, suggest returning to lobby
+        if (this.gameStarted && !this.gameFinished) {
+            setTimeout(() => {
+                if (confirm('Your opponent left the game. Would you like to return to the lobby?')) {
+                    this.leaveRoom();
+                }
+            }, 2000);
+        }
     }
 
     onPlayerReset(data) {
-        const playerName = data.player_name;
-        const resetsLeft = data.resets_left;
-        
         if (data.player_id === this.playerId) {
-            // This player reset their own game
-            this.resetGameState();
-            this.showMessage(`You reset your game. ${resetsLeft} resets remaining.`, 'info');
+            // Reset own game
+            this.initializeGame();
+            this.showMessage('Your game has been reset', 'info');
         } else {
-            // Opponent reset their game
-            this.showMessage(`${playerName} reset their game. They have ${resetsLeft} resets left.`, 'info');
+            this.showMessage(`${data.player_name} reset their game`, 'info');
         }
     }
 
@@ -654,78 +936,126 @@ class MultiplayerTowerOfHanoi {
     }
 
     onLeftRoom(data) {
-        if (data.success) {
-            window.location.reload();
-        }
+        // Redirect back to main page
+        window.location.href = '/';
     }
 
-    resetGameState() {
-        // Reset the game to initial state
-        this.moves = 0;
-        this.startTime = Date.now();
-        this.initializeGame();
-        this.updateMoveCounter();
-        this.updateTimer();
-    }
-
+    // Utility methods
     showMessage(message, type = 'info') {
-        // Create or update message display
+        // Create or update message element
         let messageEl = document.getElementById('gameMessage');
         if (!messageEl) {
             messageEl = document.createElement('div');
             messageEl.id = 'gameMessage';
-            messageEl.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300';
+            messageEl.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300';
             document.body.appendChild(messageEl);
         }
-        
-        // Set styling based on type
-        messageEl.className = messageEl.className.replace(/bg-\w+-\d+/g, '');
-        messageEl.className = messageEl.className.replace(/text-\w+-\d+/g, '');
-        
-        if (type === 'error') {
-            messageEl.className += ' bg-red-500 text-white';
-        } else if (type === 'success') {
-            messageEl.className += ' bg-green-500 text-white';
-        } else {
-            messageEl.className += ' bg-blue-500 text-white';
-        }
-        
+
+        // Set message and styling based on type
         messageEl.textContent = message;
-        messageEl.style.display = 'block';
+        messageEl.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300';
         
-        // Auto-hide after 5 seconds
+        switch (type) {
+            case 'success':
+                messageEl.className += ' bg-green-500 text-white';
+                break;
+            case 'error':
+                messageEl.className += ' bg-red-500 text-white';
+                break;
+            case 'warning':
+                messageEl.className += ' bg-yellow-500 text-black';
+                break;
+            default:
+                messageEl.className += ' bg-blue-500 text-white';
+        }
+
+        // Show message
+        messageEl.style.opacity = '1';
+        messageEl.style.transform = 'translateX(-50%) translateY(0)';
+
+        // Hide after 3 seconds
         setTimeout(() => {
-            messageEl.style.display = 'none';
-        }, 5000);
+            messageEl.style.opacity = '0';
+            messageEl.style.transform = 'translateX(-50%) translateY(-20px)';
+        }, 3000);
     }
 
-    joinTeam(team) {
-        if (this.roomId && this.playerId) {
-            this.socket.emit('join_team', {
-                room_id: this.roomId,
-                player_id: this.playerId,
-                team: team
+    copyInviteLink() {
+        const inviteLink = `${window.location.origin}/room/${this.roomId}`;
+        
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(inviteLink).then(() => {
+                this.showMessage('Invite link copied to clipboard!', 'success');
+            }).catch(err => {
+                console.error('Clipboard API failed:', err);
+                this.fallbackCopyTextToClipboard(inviteLink);
             });
+        } else {
+            this.fallbackCopyTextToClipboard(inviteLink);
         }
     }
 
-    switchToSpectator() {
+    fallbackCopyTextToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            this.showMessage('Invite link copied to clipboard!', 'success');
+        } catch (err) {
+            this.showMessage('Failed to copy invite link', 'error');
+        }
+        document.body.removeChild(textArea);
+    }
+
+    forfeitGame() {
+        if (this.gameStarted && !this.gameFinished && this.roomId && this.playerId) {
+            if (confirm('Are you sure you want to forfeit the game?')) {
+                this.socket.emit('forfeit_game', {
+                    room_id: this.roomId,
+                    player_id: this.playerId
+                });
+            }
+        }
+    }
+
+    resetGame() {
+        if (this.gameStarted && !this.gameFinished && this.roomId && this.playerId) {
+            if (confirm('Are you sure you want to reset your game? This will use one of your reset chances.')) {
+                this.socket.emit('reset_game', {
+                    room_id: this.roomId,
+                    player_id: this.playerId
+                });
+            }
+        }
+    }
+
+    newGame() {
+        if (confirm('Are you sure you want to start a new game? This will leave the current room.')) {
+            this.leaveRoom();
+        }
+    }
+
+    leaveRoom() {
         if (this.roomId && this.playerId) {
-            this.socket.emit('switch_to_spectator', {
+            this.socket.emit('leave_room', {
                 room_id: this.roomId,
                 player_id: this.playerId
             });
+        } else {
+            // No room to leave, just reload
+            window.location.reload();
         }
     }
 
-    switchToPlayer(team = null) {
-        if (this.roomId && this.playerId) {
-            this.socket.emit('switch_to_player', {
-                room_id: this.roomId,
-                player_id: this.playerId,
-                team: team
-            });
-        }
+    showInvalidMoveAnimation(element) {
+        // Add visual feedback for invalid moves
+        element.classList.add('invalid-move');
+        setTimeout(() => {
+            element.classList.remove('invalid-move');
+        }, 500);
     }
 }
 

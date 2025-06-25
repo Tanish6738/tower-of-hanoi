@@ -13,6 +13,7 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Global storage for game rooms
 game_rooms = {}
 player_sessions = {}
+socket_sessions = {}  # Maps socket IDs to player IDs
 
 class GameRoom:
     def __init__(self, room_id, creator_id, creator_name, game_mode='classic', max_players=2):
@@ -381,18 +382,47 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     print(f'Client disconnected: {request.sid}')
-    # Handle player leaving room
-    for player_id, room_id in list(player_sessions.items()):
+    
+    # Find player ID from socket session
+    player_id = socket_sessions.get(request.sid)
+    if player_id and player_id in player_sessions:
+        room_id = player_sessions[player_id]
+        
         if room_id in game_rooms:
             room = game_rooms[room_id]
+            player_name = room.players.get(player_id, {}).get('name', 'Unknown Player')
+            
+            # If game is active, this counts as a forfeit
+            if room.game_started and not room.game_finished and player_id in room.players:
+                if room.forfeit_game(player_id):
+                    winner_info = {
+                        'player_id': room.winner,
+                        'player_name': room.players[room.winner]['name']
+                    }
+                    socketio.emit('game_ended', {
+                        'winner': winner_info,
+                        'forfeit': True,
+                        'left_game': True,
+                        'room_info': room.get_room_info()
+                    }, room=room_id)
+            
             if room.remove_player(player_id):
                 # Room is empty, delete it
                 del game_rooms[room_id]
             else:
-                # Notify other players
-                socketio.emit('player_left', room.get_room_info(), room=room_id)
+                # Notify other players about player leaving
+                socketio.emit('player_left', {
+                    'player_name': player_name,
+                    'room_info': room.get_room_info()
+                }, room=room_id)
+        
+        # Clean up sessions
         if player_id in player_sessions:
             del player_sessions[player_id]
+    
+    # Clean up socket session
+    if request.sid in socket_sessions:
+        del socket_sessions[request.sid]
 
 @socketio.on('join_game_room')
 def handle_join_game_room(data):
@@ -401,6 +431,7 @@ def handle_join_game_room(data):
     
     if room_id in game_rooms and player_id in game_rooms[room_id].players:
         join_room(room_id)
+        socket_sessions[request.sid] = player_id  # Track socket to player mapping
         emit('room_joined', game_rooms[room_id].get_room_info())
         # Notify all players in room about current state
         socketio.emit('room_update', game_rooms[room_id].get_room_info(), room=room_id)
@@ -559,10 +590,12 @@ def handle_leave_room(data):
         # If game is active, this counts as a forfeit
         if room.game_started and not room.game_finished:
             if room.forfeit_game(player_id):
-                winner_name = room.players[room.winner]['name']
+                winner_info = {
+                    'player_id': room.winner,
+                    'player_name': room.players[room.winner]['name']
+                }
                 socketio.emit('game_ended', {
-                    'winner': winner_name,
-                    'loser': player_name,
+                    'winner': winner_info,
                     'forfeit': True,
                     'left_game': True,
                     'room_info': room.get_room_info()
@@ -582,6 +615,10 @@ def handle_leave_room(data):
         # Clean up player session
         if player_id in player_sessions:
             del player_sessions[player_id]
+            
+        # Clean up socket session
+        if request.sid in socket_sessions:
+            del socket_sessions[request.sid]
         
         # Remove from socket room
         leave_room(room_id)

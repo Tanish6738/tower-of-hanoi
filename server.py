@@ -296,6 +296,10 @@ class GameRoom:
 
 @app.route('/')
 def index():
+    return render_template('index.html')
+
+@app.route('/multiplayer')
+def multiplayer():
     return render_template('multiplayer.html')
 
 @app.route('/create-room', methods=['POST'])

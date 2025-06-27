@@ -21,18 +21,6 @@
     opacity: 0.9;
 }
 
-.disk.invalid-move {
-    animation: shake 0.5s ease-in-out;
-    border-color: #ef4444 !important;
-    background-color: #fca5a5 !important;
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
-}
-
 /* Mobile-specific disk styles */
 @media (max-width: 768px) {
     .disk {
@@ -87,8 +75,16 @@
 }
 @keyframes shake {
     0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-2px); }
-    75% { transform: translateX(2px); }
+    25% { transform: translateX(-3px); }
+    75% { transform: translateX(3px); }
+}
+
+@media (max-width: 768px) {
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-2px); }
+        75% { transform: translateX(2px); }
+    }
 }
 
 /* Fade-in animation with mobile optimization */

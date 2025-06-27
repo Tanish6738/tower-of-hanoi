@@ -638,19 +638,44 @@ class MultiplayerTowerOfHanoi {
     // Touch and drag handlers (adapted from original game)
     handleTouchStart(e) {
         try {
-            if (!e.target.classList.contains('disk')) return;
+            // Comprehensive validation to prevent errors
+            if (!e || !e.target) {
+                console.warn('Touch start: Invalid event or target');
+                return;
+            }
+            
+            // Find the disk element (in case the event target is a child element)
+            const diskElement = e.target.closest('.disk');
+            if (!diskElement) {
+                return; // Not a disk element, ignore
+            }
+            
+            if (!diskElement.dataset || diskElement.dataset.diskId === undefined) {
+                console.warn('Touch start: Missing disk ID in dataset');
+                return;
+            }
             
             e.preventDefault();
-            const touch = e.touches[0];
-            const diskId = parseInt(e.target.dataset.diskId);
+            const touch = e.touches && e.touches[0];
+            if (!touch) {
+                console.warn('Touch start: No touch data available');
+                return;
+            }
+            
+            const diskId = parseInt(diskElement.dataset.diskId);
+            if (isNaN(diskId)) {
+                console.warn('Touch start: Invalid disk ID:', diskElement.dataset.diskId);
+                return;
+            }
+            
             const pegIndex = this.findDiskPeg(diskId);
             
             if (pegIndex !== -1 && this.isTopDisk(diskId, pegIndex)) {
-                this.draggedDisk = e.target;
+                this.draggedDisk = diskElement;
                 this.touchStartPos = { x: touch.clientX, y: touch.clientY };
-                e.target.classList.add('dragging');
+                diskElement.classList.add('dragging');
             } else {
-                this.showInvalidMoveAnimation(e.target);
+                this.showInvalidMoveAnimation(diskElement);
             }
         } catch (error) {
             console.warn('Touch start error:', error);
@@ -680,6 +705,13 @@ class MultiplayerTowerOfHanoi {
         try {
             if (!this.draggedDisk) return;
             
+            if (!e || !e.changedTouches || !e.changedTouches[0]) {
+                console.warn('Touch end: Invalid event or touch data');
+                // Still clean up the dragged disk
+                this.cleanupDraggedDisk();
+                return;
+            }
+            
             e.preventDefault();
             const touch = e.changedTouches[0];
             
@@ -687,9 +719,22 @@ class MultiplayerTowerOfHanoi {
             const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             const peg = elementBelow ? elementBelow.closest('.peg') : null;
             
-            if (peg) {
+            if (peg && peg.dataset && peg.dataset.peg !== undefined) {
                 const pegIndex = parseInt(peg.dataset.peg);
+                
+                if (!this.draggedDisk.dataset || this.draggedDisk.dataset.diskId === undefined) {
+                    console.warn('Touch end: Missing disk ID in dragged disk');
+                    this.cleanupDraggedDisk();
+                    return;
+                }
+                
                 const diskId = parseInt(this.draggedDisk.dataset.diskId);
+                
+                if (isNaN(pegIndex) || isNaN(diskId)) {
+                    console.warn('Touch end: Invalid peg index or disk ID');
+                    this.cleanupDraggedDisk();
+                    return;
+                }
                 
                 if (this.moveDisk(diskId, pegIndex)) {
                     // Move successful
@@ -701,38 +746,94 @@ class MultiplayerTowerOfHanoi {
             }
             
             // Clean up
-            this.draggedDisk.classList.remove('dragging');
-            this.draggedDisk.style.transform = 'translateX(-50%)';
-            this.draggedDisk.style.zIndex = '';
-            this.draggedDisk = null;
+            this.cleanupDraggedDisk();
         } catch (error) {
             console.warn('Touch end error:', error);
+            // Ensure cleanup happens even if there's an error
+            this.cleanupDraggedDisk();
+        }
+    }
+    
+    // Helper method for consistent cleanup
+    cleanupDraggedDisk() {
+        try {
+            if (this.draggedDisk) {
+                if (this.draggedDisk.classList) {
+                    this.draggedDisk.classList.remove('dragging');
+                }
+                if (this.draggedDisk.style) {
+                    this.draggedDisk.style.transform = 'translateX(-50%)';
+                    this.draggedDisk.style.zIndex = '';
+                }
+            }
+        } catch (error) {
+            console.warn('Error during drag cleanup:', error);
+        } finally {
+            this.draggedDisk = null;
         }
     }
 
     // Drag and drop handlers
     handleDragStart(e) {
         try {
-            const diskId = parseInt(e.target.dataset.diskId);
+            // Comprehensive validation to prevent errors
+            if (!e || !e.target) {
+                console.warn('Drag start: Invalid event or target');
+                e && e.preventDefault && e.preventDefault();
+                return;
+            }
+            
+            // Find the disk element (in case the event target is a child element)
+            const diskElement = e.target.closest('.disk');
+            if (!diskElement) {
+                console.warn('Drag start: Target is not within a disk element');
+                e.preventDefault();
+                return;
+            }
+            
+            if (!diskElement.dataset || diskElement.dataset.diskId === undefined) {
+                console.warn('Drag start: Missing disk ID in dataset');
+                e.preventDefault();
+                return;
+            }
+            
+            const diskId = parseInt(diskElement.dataset.diskId);
+            if (isNaN(diskId)) {
+                console.warn('Drag start: Invalid disk ID:', diskElement.dataset.diskId);
+                e.preventDefault();
+                return;
+            }
+            
             const pegIndex = this.findDiskPeg(diskId);
             
             if (pegIndex !== -1 && this.isTopDisk(diskId, pegIndex)) {
-                e.dataTransfer.setData('text/plain', diskId);
-                e.target.classList.add('dragging');
-                this.draggedDisk = e.target;
+                if (e.dataTransfer) {
+                    e.dataTransfer.setData('text/plain', diskId);
+                }
+                diskElement.classList.add('dragging');
+                this.draggedDisk = diskElement;
             } else {
                 e.preventDefault();
-                this.showInvalidMoveAnimation(e.target);
+                this.showInvalidMoveAnimation(diskElement);
             }
         } catch (error) {
             console.warn('Drag start error:', error);
-            e.preventDefault();
+            e && e.preventDefault && e.preventDefault();
         }
     }
 
     handleDragEnd(e) {
         try {
-            e.target.classList.remove('dragging');
+            if (!e || !e.target) {
+                console.warn('Drag end: Invalid event or target');
+                return;
+            }
+            
+            // Find the disk element (in case the event target is a child element)
+            const diskElement = e.target.closest('.disk');
+            if (diskElement && diskElement.classList) {
+                diskElement.classList.remove('dragging');
+            }
             this.draggedDisk = null;
         } catch (error) {
             console.warn('Drag end error:', error);
@@ -1136,8 +1237,30 @@ function drop(event) {
     try {
         event.preventDefault();
         const peg = event.currentTarget;
+        
+        if (!peg || !peg.dataset || peg.dataset.peg === undefined) {
+            console.warn('Drop error: Invalid peg or missing peg dataset');
+            return;
+        }
+        
         const pegIndex = parseInt(peg.dataset.peg);
-        const diskId = parseInt(event.dataTransfer.getData('text/plain'));
+        if (isNaN(pegIndex)) {
+            console.warn('Drop error: Invalid peg index:', peg.dataset.peg);
+            return;
+        }
+        
+        let diskId;
+        if (event.dataTransfer) {
+            const diskIdData = event.dataTransfer.getData('text/plain');
+            diskId = parseInt(diskIdData);
+            if (isNaN(diskId)) {
+                console.warn('Drop error: Invalid disk ID from dataTransfer:', diskIdData);
+                return;
+            }
+        } else {
+            console.warn('Drop error: No dataTransfer available');
+            return;
+        }
         
         peg.classList.remove('drop-target');
         

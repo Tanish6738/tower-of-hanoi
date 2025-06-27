@@ -515,22 +515,37 @@ class TowerOfHanoi {
         try {
             if (!this.draggedDisk) return;
             
+            if (!e || !e.changedTouches || !e.changedTouches[0]) {
+                console.warn('Touch end: Invalid event or touch data');
+                // Still clean up the dragged disk
+                this.cleanupDraggedDisk();
+                return;
+            }
+            
             e.preventDefault();
             const touch = e.changedTouches[0];
             const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             const peg = elementBelow?.closest('.peg');
             
-            // Clean up
-            this.draggedDisk.classList.remove('dragging');
-            this.draggedDisk.style.transform = 'translateX(-50%)';
-            this.draggedDisk.style.zIndex = '';
-            
             // Remove all drop target highlights
             document.querySelectorAll('.peg').forEach(p => p.classList.remove('drop-target'));
             
-            if (peg) {
+            if (peg && peg.dataset && peg.dataset.peg !== undefined) {
                 const pegIndex = parseInt(peg.dataset.peg);
+                
+                if (!this.draggedDisk.dataset || this.draggedDisk.dataset.diskId === undefined) {
+                    console.warn('Touch end: Missing disk ID in dragged disk');
+                    this.cleanupDraggedDisk();
+                    return;
+                }
+                
                 const diskId = parseInt(this.draggedDisk.dataset.diskId);
+                
+                if (isNaN(pegIndex) || isNaN(diskId)) {
+                    console.warn('Touch end: Invalid peg index or disk ID');
+                    this.cleanupDraggedDisk();
+                    return;
+                }
                 
                 if (this.moveDisk(diskId, pegIndex)) {
                     this.moves++;
@@ -543,16 +558,30 @@ class TowerOfHanoi {
                 }
             }
             
-            this.draggedDisk = null;
+            this.cleanupDraggedDisk();
         } catch (error) {
             console.warn('Touch end error:', error);
-            // Clean up in case of error
+            // Ensure cleanup happens even if there's an error
+            this.cleanupDraggedDisk();
+        }
+    }
+    
+    // Helper method for consistent cleanup
+    cleanupDraggedDisk() {
+        try {
             if (this.draggedDisk) {
-                this.draggedDisk.classList.remove('dragging');
-                this.draggedDisk.style.transform = 'translateX(-50%)';
-                this.draggedDisk.style.zIndex = '';
-                this.draggedDisk = null;
+                if (this.draggedDisk.classList) {
+                    this.draggedDisk.classList.remove('dragging');
+                }
+                if (this.draggedDisk.style) {
+                    this.draggedDisk.style.transform = 'translateX(-50%)';
+                    this.draggedDisk.style.zIndex = '';
+                }
             }
+        } catch (error) {
+            console.warn('Error during drag cleanup:', error);
+        } finally {
+            this.draggedDisk = null;
         }
     }
 
